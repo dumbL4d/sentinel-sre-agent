@@ -113,6 +113,11 @@ class PhoenixMCPClient:
             return self._demo_sessions()[:limit]
         return self._run_async(self.list_sessions(project_name, limit))
 
+    def query_spans(self, trace_id: str | None = None, span_kind: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
+        if self._use_demo():
+            return self._demo_spans()[:limit]
+        return self._run_async(self.get_spans(trace_id=trace_id, span_kind=span_kind, limit=limit))
+
     def query_evaluations(self, project_name: str | None = None, limit: int = 10) -> list[dict[str, Any]]:
         if self._use_demo():
             return self._demo_evaluations()[:limit]
@@ -232,6 +237,40 @@ class PhoenixMCPClient:
             {"session_id": "session-alpha", "turns": 5, "tools_called": 3, "status": "resolved"},
             {"session_id": "session-beta", "turns": 3, "tools_called": 2, "status": "resolved"},
             {"session_id": "session-gamma", "turns": 8, "tools_called": 4, "status": "resolved"},
+        ]
+
+    def _demo_spans(self) -> list[dict]:
+        return [
+            {
+                "span_id": "span-001",
+                "trace_id": "trace-001",
+                "span_kind": "LLM",
+                "name": "generate_content",
+                "start_time": "2026-05-05T14:23:00.123Z",
+                "end_time": "2026-05-05T14:23:02.456Z",
+                "duration_ms": 2333.0,
+                "attributes": {"model": "gemini-2.0-flash", "temperature": 0.7},
+            },
+            {
+                "span_id": "span-002",
+                "trace_id": "trace-001",
+                "span_kind": "TOOL",
+                "name": "query_metrics",
+                "start_time": "2026-05-05T14:23:02.500Z",
+                "end_time": "2026-05-05T14:23:02.800Z",
+                "duration_ms": 300.0,
+                "attributes": {"tool": "query_metrics", "model_id": "sentiment-classifier-v2"},
+            },
+            {
+                "span_id": "span-003",
+                "trace_id": "trace-003",
+                "span_kind": "LLM",
+                "name": "generate_content",
+                "start_time": "2026-05-04T16:45:10.000Z",
+                "end_time": "2026-05-04T16:45:15.000Z",
+                "duration_ms": 5000.0,
+                "attributes": {"model": "gemini-2.0-flash", "temperature": 0.5},
+            },
         ]
 
     def _demo_evaluations(self) -> list[dict]:

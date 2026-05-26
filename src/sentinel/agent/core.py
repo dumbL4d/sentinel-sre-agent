@@ -195,14 +195,17 @@ class SentinelAgent:
                 ))
         return contents
 
-    def _build_tool_declarations(self) -> list:
+    def _build_tool_declarations(self) -> list | None:
         """Build tool declarations for google-genai."""
-        declarations = []
+        func_declarations = []
         for tool in self.tools:
             decl = tool.to_gemini_tool()
             if "function_declarations" in decl:
-                declarations.extend(decl["function_declarations"])
-        return declarations if declarations else None
+                for fd in decl["function_declarations"]:
+                    func_declarations.append(types.FunctionDeclaration(**fd))
+        if func_declarations:
+            return [types.Tool(function_declarations=func_declarations)]
+        return None
 
     def _execute_tool(self, function_call: types.FunctionCall) -> ToolResult:
         """Execute a tool call."""

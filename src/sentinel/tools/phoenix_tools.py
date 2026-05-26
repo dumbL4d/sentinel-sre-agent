@@ -103,9 +103,7 @@ class QueryPhoenixSpans(BaseTool):
         span_kind: str | None = None,
         limit: int = 50,
     ) -> str:
-        spans = self.phoenix_client.run_sync(
-            self.phoenix_client.get_spans(trace_id=trace_id, span_kind=span_kind, limit=limit)
-        )
+        spans = self.phoenix_client.query_spans(trace_id=trace_id, span_kind=span_kind, limit=limit)
 
         analysis = {
             "source": "phoenix_spans",
