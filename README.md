@@ -17,43 +17,41 @@ When ML models degrade in production, engineers need more than alerts — they n
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        User Query                               │
-│  "Investigate latency spike in sentiment-classifier-v2"         │
-└────────────────────────────┬────────────────────────────────────┘
-                             ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              Gemini Agent (google-genai SDK)                     │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │  Reasoning Loop with Tool Calling                         │  │
-│  │                                                           │  │
-│  │  1. SELF-INTROSPECT → Query own past traces via MCP       │  │
-│  │  2. QUERY METRICS  → Check model health                   │  │
-│  │  3. CORRELATE      → Find patterns across signals          │  │
-│  │  4. ANALYZE DRIFT  → Detect distribution shifts           │  │
-│  │  5. REMEDIATE      → Suggest actionable fixes              │  │
-│  │  6. EVALUATE       → LLM-as-a-judge scores response       │  │
-│  └───────────────────────────────────────────────────────────┘  │
-└────────────────────────────┬────────────────────────────────────┘
-                             ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    Tracing (OpenInference)                       │
-│  Every LLM call → traced → sent to Phoenix                      │
-└────────────────────────────┬────────────────────────────────────┘
-                             ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                   Arize Phoenix Cloud                            │
-│  ┌────────────┐  ┌────────────┐  ┌─────────────────────────┐   │
-│  │ Traces     │  │ Sessions   │  │ Evaluations (LLM Judge) │   │
-│  │ (spans)    │  │ (convs)    │  │ (accuracy, completeness)│   │
-│  └────────────┘  └────────────┘  └─────────────────────────┘   │
-│                                                                 │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │  Phoenix MCP Server (Self-Introspection Loop)           │   │
-│  │  Agent queries its own traces → learns from history     │   │
-│  └─────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    UQ["💬 User Query
+    'Investigate latency spike in sentiment-classifier-v2'"]
+
+    subgraph AG["Gemini Agent (google-genai SDK)"]
+        RL["Reasoning Loop with Tool Calling"]
+        S1["1. SELF-INTROSPECT → Query past traces via MCP"]
+        S2["2. QUERY METRICS → Check model health"]
+        S3["3. CORRELATE → Find patterns across signals"]
+        S4["4. ANALYZE DRIFT → Detect distribution shifts"]
+        S5["5. REMEDIATE → Suggest actionable fixes"]
+        S6["6. EVALUATE → LLM-as-a-judge scores response"]
+    end
+
+    TR["📡 Tracing (OpenInference)
+    Every LLM call → traced → sent to Phoenix"]
+
+    subgraph PX["Arize Phoenix Cloud"]
+        direction LR
+        T["📊 Traces (spans)"]
+        S["💬 Sessions (convs)"]
+        E["⭐ Evaluations (LLM Judge)
+        accuracy, completeness, actionability"]
+        MCP["🔄 Phoenix MCP Server
+        Self-Introspection Loop
+        Agent queries own traces → learns from history"]
+    end
+
+    UQ --> AG
+    S1 --> MCP
+    AG --> TR
+    TR --> PX
+    MCP -.->|"queries past traces
+    for self-improvement"| S1
 ```
 
 ## Quick Start
