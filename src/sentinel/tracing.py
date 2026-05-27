@@ -32,16 +32,21 @@ def setup_tracing(project_name: str | None = None) -> None:
 
 def _setup_cloud_tracing(endpoint: str, api_key: str, project: str) -> None:
     """Set up tracing for Phoenix Cloud."""
+    os.environ.setdefault("PHOENIX_COLLECTOR_ENDPOINT", endpoint)
+    os.environ.setdefault("PHOENIX_API_KEY", api_key)
+
     try:
         from phoenix.otel import register
 
         register(
             project_name=project,
+            endpoint=endpoint,
+            api_key=api_key,
+            batch=True,
             auto_instrument=True,
         )
     except ImportError:
         _setup_manual_tracing(f"{endpoint}/v1/traces", api_key)
-
 
 def _setup_local_tracing(endpoint: str) -> None:
     """Set up tracing for local Phoenix server."""
@@ -50,6 +55,7 @@ def _setup_local_tracing(endpoint: str) -> None:
 
         register(
             project_name="sentinel-sre-agent",
+            batch=True,
             auto_instrument=True,
         )
     except ImportError:
