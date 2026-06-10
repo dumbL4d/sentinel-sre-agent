@@ -5,12 +5,6 @@ on:
     branches: [main]
   workflow_dispatch:
 
-env:
-  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  SERVICE_NAME: sentinel-sre-agent
-  REGION: us-central1
-  ARTIFACT_REGISTRY_REPO: sentinel-agent
-
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -31,20 +25,26 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Configure Docker
-        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev
 
       - name: Build and Push
+        env:
+          PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
         run: |
-          IMAGE_TAG="${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO }}/${{ env.SERVICE_NAME }}:${{ github.sha }}"
-          docker build -t $IMAGE_TAG .
-          docker push $IMAGE_TAG
+          IMAGE_TAG="us-central1-docker.pkg.dev/${PROJECT_ID}/sentinel-agent/sentinel-sre-agent:${{ github.sha }}"
+          echo "Building: $IMAGE_TAG"
+          docker build -t "$IMAGE_TAG" .
+          docker push "$IMAGE_TAG"
           echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
 
       - name: Deploy to Cloud Run
+        env:
+          PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
         run: |
-          gcloud run deploy ${{ env.SERVICE_NAME }} \
-            --image ${{ env.IMAGE_TAG }} \
-            --region ${{ env.REGION }} \
+          IMAGE_TAG="us-central1-docker.pkg.dev/${PROJECT_ID}/sentinel-agent/sentinel-sre-agent:${{ github.sha }}"
+          gcloud run deploy sentinel-sre-agent \
+            --image "$IMAGE_TAG" \
+            --region us-central1 \
             --platform managed \
             --allow-unauthenticated \
             --memory 2Gi \
@@ -58,8 +58,9 @@ jobs:
 
       - name: Show URL
         run: |
-          URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
-            --region ${{ env.REGION }} \
+          URL=$(gcloud run services describe sentinel-sre-agent \
+            --region us-central1 \
             --format 'value(status.url)')
           echo "Deployed to: $URL"
-          echo "CLOUD_RUN_URL=$URL" >> $GITHUB_STEP_SUMMARY
+          echo "## Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "URL: $URL" >> $GITHUB_STEP_SUMMARY
