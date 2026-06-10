@@ -126,7 +126,7 @@ class SentinelAdkAgent:
         if not self.api_key:
             raise ValueError("GEMINI_API_KEY is required. Set it in your .env file or environment.")
 
-        self.model = model or os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+        self.model = model or os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite-lite-001")
         self.pc = phoenix_client or PhoenixMCPClient()
         self.system_prompt = system_prompt or SYSTEM_PROMPT
 
@@ -137,6 +137,9 @@ class SentinelAdkAgent:
             model=self.model,
             instruction=self.system_prompt,
             tools=self.adk_tools,
+            generate_content_config=genai_types.GenerateContentConfig(
+                thinking_config=genai_types.ThinkingConfig(thinking_budget=0)
+            ),
         )
 
         from google.adk.sessions import InMemorySessionService
