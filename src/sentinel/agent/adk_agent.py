@@ -126,7 +126,7 @@ class SentinelAdkAgent:
         if not self.api_key:
             raise ValueError("GEMINI_API_KEY is required. Set it in your .env file or environment.")
 
-        self.model = model or os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite-lite-001")
+        self.model = model or os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
         self.pc = phoenix_client or PhoenixMCPClient()
         self.system_prompt = system_prompt or SYSTEM_PROMPT
 
