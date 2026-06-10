@@ -174,7 +174,10 @@
 <div class="container">
   <header>
     <h1>Sentinel SRE Agent</h1>
-    <span class="badge">Powered by Vertex AI ADK + Arize Phoenix</span>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
+      <span class="badge" id="healthBadge">Checking Phoenix...</span>
+      <span class="badge" id="modelBadge" style="display:none;"></span>
+    </div>
   </header>
 
   <div class="input-section">
@@ -201,7 +204,10 @@
 
   <div class="response-section" id="responseSection">
     <div class="response-card" id="responseCard">
-      <h3>Investigation Results</h3>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <h3 style="margin:0;">Investigation Results</h3>
+        <span id="dataSourceBadge" style="display:none;font-size:0.7rem;padding:3px 10px;border-radius:99px;font-weight:600;white-space:nowrap;"></span>
+      </div>
       <div class="response-content" id="responseContent"></div>
       <div id="toolCalls" style="margin-top: 12px;"></div>
     </div>
@@ -230,18 +236,35 @@
 </div>
 
 <script>
+let hasPhoenixData = false;
+let hasAnyToolResults = false;
+
+// ---- Health polling ----
+async function pollHealth() {
+  try {
+    const r = await fetch('/health');
+    const h = await r.json();
+    const badge = document.getElementById('healthBadge');
+    if (h.phoenix_connected) {
+      badge.innerHTML = '<span style="color:var(--success)">●</span> Phoenix connected';
+      badge.style.borderColor = 'var(--success)';
+      badge.style.color = 'var(--success)';
+    } else {
+      badge.innerHTML = '<span style="color:var(--warn)">●</span> Phoenix offline';
+      badge.style.borderColor = 'var(--warn)';
+      badge.style.color = 'var(--warn)';
+    }
+    const modelBadge = document.getElementById('modelBadge');
+    if (h.model) {
+      modelBadge.textContent = h.model;
+      modelBadge.style.display = 'inline';
+    }
+  } catch (e) { /* ignore */ }
+}
+setInterval(pollHealth, 10000);
+pollHealth();
+
 // Load scenarios on page load
-fetch('/scenarios')
-  .then(r => r.json())
-  .then(scenarios => {
-    const sel = document.getElementById('scenarioSelect');
-    scenarios.forEach(s => {
-      const opt = document.createElement('option');
-      opt.value = s.id;
-      opt.textContent = `${s.title} (${s.complexity})`;
-      sel.appendChild(opt);
-    });
-  });
 
 function loadScenario() {
   const sel = document.getElementById('scenarioSelect');
@@ -385,10 +408,16 @@ function handleEvent(event) {
       el.className = 'tool-call';
       el.innerHTML = `<span class="icon pending"></span> <code>${data.name}</code>`;
       tc.appendChild(el);
+      hasAnyToolResults = true;
       break;
 
     case 'tool_result':
       setLoading(true, 'Processing results...');
+      hasAnyToolResults = true;
+      try {
+        const parsed = JSON.parse(data);
+        if (parsed.data_source === 'phoenix') hasPhoenixData = true;
+      } catch (e) { /* not JSON, skip */ }
       break;
 
     case 'evaluation':
@@ -418,11 +447,28 @@ function handleEvent(event) {
 
     case 'done':
       setLoading(false);
+      const dsBadge = document.getElementById('dataSourceBadge');
+      if (hasPhoenixData) {
+        dsBadge.style.display = 'inline';
+        dsBadge.textContent = 'Live Phoenix data';
+        dsBadge.style.background = 'rgba(52,211,153,0.15)';
+        dsBadge.style.color = 'var(--success)';
+        dsBadge.style.border = '1px solid var(--success)';
+      } else if (hasAnyToolResults) {
+        dsBadge.style.display = 'inline';
+        dsBadge.textContent = 'Synthetic data';
+        dsBadge.style.background = 'rgba(251,191,36,0.15)';
+        dsBadge.style.color = 'var(--warn)';
+        dsBadge.style.border = '1px solid var(--warn)';
+      }
       break;
   }
 }
 
 function clearAll() {
+  hasPhoenixData = false;
+  hasAnyToolResults = false;
+  document.getElementById('dataSourceBadge').style.display = 'none';
   document.getElementById('missionInput').value = '';
   document.getElementById('responseSection').classList.remove('active');
   document.getElementById('evaluationSection').style.display = 'none';

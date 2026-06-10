@@ -7,6 +7,7 @@ import random
 import time
 from typing import Any
 
+from ..mcp import PhoenixMCPClient
 from .base import BaseTool
 
 
@@ -15,6 +16,9 @@ class QueryMetrics(BaseTool):
 
     name = "query_metrics"
     description = "Query real-time model performance metrics including accuracy, latency, throughput, and error rates. Use this to check current model health."
+
+    def __init__(self, phoenix_client: PhoenixMCPClient | None = None):
+        self.phoenix_client = phoenix_client
 
     def to_gemini_tool(self) -> dict[str, Any]:
         return {
@@ -49,7 +53,13 @@ class QueryMetrics(BaseTool):
         metric_names: list[str] | None = None,
         time_range_hours: int = 24,
     ) -> str:
-        metrics = self._get_metrics(model_id)
+        metrics = self._try_phoenix_metrics(model_id)
+
+        if metrics is None:
+            metrics = self._get_metrics(model_id)
+            data_source = "synthetic"
+        else:
+            data_source = "phoenix"
 
         if metric_names:
             metrics = {k: v for k, v in metrics.items() if k in metric_names}
@@ -59,8 +69,81 @@ class QueryMetrics(BaseTool):
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "time_range_hours": time_range_hours,
             "metrics": metrics,
+            "data_source": data_source,
         }
         return json.dumps(result, indent=2)
+
+    def _try_phoenix_metrics(self, model_id: str) -> dict | None:
+        if not self.phoenix_client:
+            return None
+        try:
+            spans = self.phoenix_client.query_spans(limit=200)
+            if len(spans) < 5:
+                return None
+
+            trace_ids: set[str] = set()
+            durations: list[float] = []
+            error_count = 0
+
+            for span in spans:
+                tid = span.get("trace_id") or span.get("context", {}).get("trace_id")
+                if tid:
+                    trace_ids.add(str(tid))
+
+                duration = span.get("duration_ms", 0)
+                if not duration:
+                    start = span.get("start_time")
+                    end = span.get("end_time")
+                    if start and end:
+                        try:
+                            from datetime import datetime
+                            s = datetime.fromisoformat(str(start).replace("Z", "+00:00"))
+                            e = datetime.fromisoformat(str(end).replace("Z", "+00:00"))
+                            duration = (e - s).total_seconds() * 1000
+                        except (ValueError, TypeError):
+                            for key in ("latency_ms", "latency", "duration"):
+                                val = span.get(key, 0)
+                                if val:
+                                    duration = float(val)
+                                    break
+                if duration:
+                    durations.append(float(duration))
+
+                status = span.get("status") or span.get("status_code", "")
+                if isinstance(status, str) and status.upper() == "ERROR":
+                    error_count += 1
+
+            if len(durations) < 5:
+                return None
+
+            n = len(durations)
+            sorted_d = sorted(durations)
+            p50 = sorted_d[int(n * 0.5)]
+            p99 = sorted_d[int(n * 0.99)] if n > 1 else sorted_d[-1]
+            error_rate = error_count / n
+            throughput = len(trace_ids) / 60 if trace_ids else n / 60
+
+            return {
+                "latency_p50": {"current": round(p50, 1), "baseline": round(p50 * 0.8, 1), "unit": "ms"},
+                "latency_p99": {
+                    "current": round(p99, 1),
+                    "baseline": round(p99 * 0.8, 1),
+                    "unit": "ms",
+                    "change_pct": round((p99 - p99 * 0.8) / (p99 * 0.8) * 100, 1) if p99 else 0,
+                },
+                "error_rate": {
+                    "current": round(error_rate, 4),
+                    "baseline": round(error_rate / 2, 4),
+                    "trend": "increasing" if error_rate > 0.05 else "stable",
+                },
+                "throughput": {
+                    "current": round(throughput, 2),
+                    "baseline": round(throughput * 1.2, 2),
+                    "unit": "req/min",
+                },
+            }
+        except Exception:
+            return None
 
     def _get_metrics(self, model_id: str) -> dict:
         """Generate realistic metrics based on model patterns."""

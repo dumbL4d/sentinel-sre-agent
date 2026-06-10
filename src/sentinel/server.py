@@ -71,8 +71,32 @@ def root():
 
 @app.get("/health")
 def health():
-    """Health check endpoint for Cloud Run."""
-    return {"status": "ok", "service": "sentinel-sre-agent"}
+    """Health check endpoint for Cloud Run with Phoenix connectivity and model info."""
+    phoenix_ok = False
+    try:
+        pc = PhoenixMCPClient()
+        if not pc._use_demo():
+            async def _check():
+                try:
+                    result = await asyncio.wait_for(pc.list_traces(limit=1), timeout=3.0)
+                    return len(result) > 0
+                except Exception:
+                    return False
+            loop = asyncio.new_event_loop()
+            try:
+                phoenix_ok = loop.run_until_complete(_check())
+            finally:
+                loop.close()
+    except Exception:
+        phoenix_ok = False
+
+    return {
+        "status": "ok",
+        "service": "sentinel-sre-agent",
+        "phoenix_connected": phoenix_ok,
+        "model": os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite"),
+        "demo_mode": os.environ.get("SENTINEL_DEMO_MODE", "false").lower() == "true",
+    }
 
 
 @app.get("/scenarios")

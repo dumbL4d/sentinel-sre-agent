@@ -69,7 +69,7 @@ def _make_tool_wrappers(phoenix_client: PhoenixMCPClient | None = None) -> list[
     # -- SRE data query tools --
     def query_metrics(model_id: str, metric_names: list[str] | None = None, time_range_hours: int = 24) -> str:
         """Query real-time model performance metrics including accuracy, latency, throughput, and error rates. Use this to check current model health."""
-        return QueryMetrics().execute(model_id=model_id, metric_names=metric_names, time_range_hours=time_range_hours)
+        return QueryMetrics(phoenix_client=pc).execute(model_id=model_id, metric_names=metric_names, time_range_hours=time_range_hours)
     tools.append(FunctionTool(func=query_metrics))
 
     def query_traces(model_id: str, filter_criteria: dict[str, str] | None = None, limit: int = 50) -> str:
