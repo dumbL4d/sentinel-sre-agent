@@ -33,3 +33,6 @@ Thumbs.db
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Docs (internal only, not for GitHub)
+docs/
