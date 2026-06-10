@@ -85,6 +85,15 @@ class PhoenixMCPClient:
             params["span_kind"] = span_kind
         return await self._call_mcp_tool("get-spans", params)
 
+    async def get_span_annotations(self, span_id: str) -> list[dict[str, Any]]:
+        """Retrieve evaluation annotations for a specific span from Phoenix via MCP.
+
+        This is the key method for the self-improvement loop: it returns actual
+        evaluation scores (accuracy, completeness, actionability) stored in Phoenix
+        so the agent can learn from past performance.
+        """
+        return await self._call_mcp_tool("get-span-annotations", {"span_id": span_id})
+
     async def list_sessions(self, project_name: str | None = None, limit: int = 10) -> list[dict[str, Any]]:
         project = project_name or self.project_name
         return await self._call_mcp_tool("list-sessions", {"project_name": project, "limit": limit})
@@ -122,6 +131,16 @@ class PhoenixMCPClient:
         if self._use_demo():
             return self._demo_evaluations()[:limit]
         return self._run_async(self.list_annotation_configs())
+
+    def query_span_annotations(self, span_id: str) -> dict[str, Any]:
+        """Fetch real evaluation annotations for a span from Phoenix.
+
+        Returns the actual evaluation scores stored in Phoenix for a given span,
+        enabling the self-improvement loop to read real historical scores.
+        """
+        if self._use_demo():
+            return {"span_id": span_id, "annotations": self._demo_evaluations()}
+        return self._run_async(self.get_span_annotations(span_id))
 
     def find_similar_incidents(self, query: str, project_name: str | None = None) -> list[dict[str, Any]]:
         if self._use_demo():

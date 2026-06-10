@@ -15,7 +15,7 @@ from rich.prompt import Prompt
 from rich.table import Table
 
 from sentinel.tracing import setup_tracing
-from sentinel.agent import SentinelAgent
+from sentinel.agent import SentinelAgent, SentinelAdkAgent
 from sentinel.mcp import PhoenixMCPClient
 from sentinel.tools import (
     QueryMetrics,
@@ -46,7 +46,8 @@ def cli():
 @click.option("--demo", is_flag=True, help="Run in demo mode with seeded data")
 @click.option("--model", default=None, help="Gemini model to use")
 @click.option("--live", is_flag=True, help="Force live Phoenix MCP (requires Phoenix server running)")
-def interactive(demo: bool, model: str | None, live: bool):
+@click.option("--adk/--no-adk", default=True, help="Use Vertex AI ADK agent (Cloud Agent Builder compliant)")
+def interactive(demo: bool, model: str | None, live: bool, adk: bool):
     """Interactive chat with the Sentinel agent."""
     load_dotenv()
 
@@ -55,7 +56,7 @@ def interactive(demo: bool, model: str | None, live: bool):
         console.print(Panel("[yellow]Demo Mode[/yellow] - Using seeded data. Add --live for real Phoenix MCP.", border_style="yellow"))
 
     setup_tracing()
-    agent = _create_agent(model=model, demo=demo and not live)
+    agent = _create_agent(model=model, demo=demo and not live, adk=adk)
 
     _print_banner()
 
@@ -112,7 +113,8 @@ def interactive(demo: bool, model: str | None, live: bool):
 @click.option("--demo", is_flag=True, help="Run demo scenarios with seeded data")
 @click.option("--evaluate/--no-evaluate", default=True, help="Run LLM-as-a-judge evaluation")
 @click.option("--scenario", default=None, help="Run a specific scenario ID")
-def demo_scenarios(demo: bool, evaluate: bool, scenario: str | None):
+@click.option("--adk/--no-adk", default=True, help="Use Vertex AI ADK agent (Cloud Agent Builder compliant)")
+def demo_scenarios(demo: bool, evaluate: bool, scenario: str | None, adk: bool):
     """Run through demo scenarios showcasing agent capabilities."""
     load_dotenv()
 
@@ -120,7 +122,7 @@ def demo_scenarios(demo: bool, evaluate: bool, scenario: str | None):
         os.environ["SENTINEL_DEMO_MODE"] = "true"
 
     setup_tracing()
-    agent = _create_agent(demo=demo)
+    agent = _create_agent(demo=demo, adk=adk)
     evaluator = LLMJudge() if evaluate else None
 
     _print_banner()
@@ -191,9 +193,21 @@ def status():
     console.print(table)
 
 
-def _create_agent(model: str | None = None, demo: bool = True) -> SentinelAgent:
-    """Create the Sentinel agent with all tools."""
+def _create_agent(model: str | None = None, demo: bool = True, adk: bool = True) -> SentinelAgent | SentinelAdkAgent:
+    """Create the Sentinel agent with all tools.
+
+    Args:
+        model: Gemini model name.
+        demo: Enable demo mode.
+        adk: Use Vertex AI ADK agent (True) or legacy custom agent (False).
+
+    Returns:
+        SentinelAdkAgent (default) or SentinelAgent (legacy).
+    """
     phoenix_client = PhoenixMCPClient()
+
+    if adk:
+        return SentinelAdkAgent(model=model, phoenix_client=phoenix_client)
 
     tools = [
         SelfIntrospect(phoenix_client),

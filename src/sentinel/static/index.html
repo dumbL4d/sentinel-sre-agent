@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sentinel SRE Agent</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface2: #334155;
+    --border: #475569;
+    --text: #f1f5f9;
+    --text-dim: #94a3b8;
+    --accent: #38bdf8;
+    --accent2: #818cf8;
+    --success: #34d399;
+    --warn: #fbbf24;
+    --error: #f87171;
+    --font: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+  }
+  .container { max-width: 960px; width: 100%; padding: 24px; }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 0; border-bottom: 1px solid var(--border); margin-bottom: 24px;
+  }
+  header h1 {
+    font-size: 1.5rem; font-weight: 700;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  header .badge {
+    font-size: 0.7rem; padding: 4px 10px; border-radius: 99px;
+    background: var(--surface2); color: var(--text-dim);
+    border: 1px solid var(--border);
+  }
+  .input-section { margin-bottom: 24px; }
+  .input-section textarea {
+    width: 100%; padding: 16px; border-radius: 12px;
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--text); font-family: var(--font); font-size: 0.9rem;
+    resize: vertical; min-height: 80px; outline: none;
+    transition: border-color 0.2s;
+  }
+  .input-section textarea:focus { border-color: var(--accent); }
+  .controls {
+    display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap;
+    align-items: center;
+  }
+  .controls button {
+    padding: 10px 24px; border-radius: 8px; border: none;
+    font-weight: 600; font-size: 0.9rem; cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #fff;
+  }
+  .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .btn-secondary {
+    background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { background: var(--border); }
+  .scenario-select {
+    padding: 10px 16px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--text); font-size: 0.85rem;
+    min-width: 200px; cursor: pointer;
+  }
+  .scenario-select:focus { border-color: var(--accent); outline: none; }
+  .loading { display: none; align-items: center; gap: 8px; color: var(--text-dim); font-size: 0.85rem; }
+  .loading.active { display: flex; }
+  .spinner {
+    width: 16px; height: 16px; border: 2px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .response-section { display: none; }
+  .response-section.active { display: block; }
+  .response-card {
+    background: var(--surface); border-radius: 12px; border: 1px solid var(--border);
+    padding: 20px; margin-bottom: 16px;
+  }
+  .response-card h3 {
+    font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--text-dim); margin-bottom: 12px;
+  }
+  .response-content {
+    font-family: var(--font); font-size: 0.85rem; line-height: 1.6;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .response-content h1, .response-content h2, .response-content h3 {
+    margin-top: 16px; margin-bottom: 8px;
+    background: none; -webkit-text-fill-color: var(--text); font-family: inherit;
+    font-size: 1rem;
+  }
+  .response-content h2 { font-size: 1.1rem; color: var(--accent); }
+  .response-content h3 { color: var(--accent2); }
+  .response-content strong { color: var(--success); }
+  .response-content ul, .response-content ol { padding-left: 20px; margin: 8px 0; }
+  .response-content li { margin: 4px 0; }
+  .response-content code {
+    background: var(--surface2); padding: 2px 6px; border-radius: 4px;
+    font-size: 0.8rem;
+  }
+  .eval-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px;
+  }
+  .eval-card {
+    background: var(--surface); border-radius: 12px; border: 1px solid var(--border);
+    padding: 16px; text-align: center;
+  }
+  .eval-card .label { font-size: 0.7rem; text-transform: uppercase; color: var(--text-dim); letter-spacing: 0.05em; }
+  .eval-card .score {
+    font-size: 2rem; font-weight: 700; margin-top: 8px;
+    font-family: var(--font);
+  }
+  .score-good { color: var(--success); }
+  .score-mid { color: var(--warn); }
+  .score-bad { color: var(--error); }
+  .eval-card .sub { font-size: 0.75rem; color: var(--text-dim); margin-top: 4px; }
+  .rationale {
+    background: var(--surface2); padding: 12px 16px; border-radius: 8px;
+    font-size: 0.85rem; color: var(--text-dim); line-height: 1.5;
+  }
+  .tool-call {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 12px; margin: 4px 0; border-radius: 6px;
+    background: var(--surface2); font-family: var(--font); font-size: 0.8rem;
+  }
+  .tool-call .icon { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .tool-call .icon.success { background: var(--success); }
+  .tool-call .icon.error { background: var(--error); }
+  .tool-call .icon.pending { background: var(--warn); animation: pulse 1s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .self-improvement {
+    background: var(--surface); border-radius: 12px; border: 1px solid var(--accent2);
+    padding: 16px; margin-bottom: 16px; display: none;
+  }
+  .self-improvement.active { display: block; }
+  .self-improvement h3 {
+    font-size: 0.75rem; text-transform: uppercase; color: var(--accent2); letter-spacing: 0.05em; margin-bottom: 8px;
+  }
+  .self-improvement p {
+    font-size: 0.85rem; color: var(--text-dim); line-height: 1.5;
+  }
+  .status-bar {
+    display: none; align-items: center; gap: 8px;
+    padding: 8px 12px; border-radius: 6px; margin-bottom: 12px;
+    font-size: 0.8rem;
+  }
+  .status-bar.active { display: flex; }
+  .status-bar.info { background: rgba(56, 189, 248, 0.1); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.2); }
+  .status-bar.success { background: rgba(52, 211, 153, 0.1); color: var(--success); border: 1px solid rgba(52, 211, 153, 0.2); }
+  .status-bar.error { background: rgba(248, 113, 113, 0.1); color: var(--error); border: 1px solid rgba(248, 113, 113, 0.2); }
+  @media (max-width: 640px) {
+    .eval-grid { grid-template-columns: 1fr; }
+    .controls { flex-direction: column; align-items: stretch; }
+    .scenario-select { min-width: auto; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>Sentinel SRE Agent</h1>
+    <span class="badge">Powered by Vertex AI ADK + Arize Phoenix</span>
+  </header>
+
+  <div class="input-section">
+    <textarea id="missionInput" placeholder="Describe an incident or ask about model health...&#10;e.g. 'Investigate the P99 latency spike in sentiment-classifier-v2'"></textarea>
+    <div class="controls">
+      <button class="btn-primary" id="investigateBtn" onclick="investigate()">Investigate</button>
+      <button class="btn-secondary" onclick="clearAll()">Clear</button>
+      <select class="scenario-select" id="scenarioSelect" onchange="loadScenario()">
+        <option value="">-- Load demo scenario --</option>
+      </select>
+      <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <span id="loadingText">Investigating...</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="status-bar" id="statusBar"></div>
+
+  <div class="self-improvement" id="selfImprovement">
+    <h3>Self-Improvement Context</h3>
+    <p id="selfImprovementContent">Querying Phoenix for similar past cases...</p>
+  </div>
+
+  <div class="response-section" id="responseSection">
+    <div class="response-card" id="responseCard">
+      <h3>Investigation Results</h3>
+      <div class="response-content" id="responseContent"></div>
+      <div id="toolCalls" style="margin-top: 12px;"></div>
+    </div>
+
+    <div id="evaluationSection" style="display: none;">
+      <div class="eval-grid">
+        <div class="eval-card">
+          <div class="label">Accuracy</div>
+          <div class="score" id="evalAccuracy">-</div>
+          <div class="sub">/5.0</div>
+        </div>
+        <div class="eval-card">
+          <div class="label">Completeness</div>
+          <div class="score" id="evalCompleteness">-</div>
+          <div class="sub">/5.0</div>
+        </div>
+        <div class="eval-card">
+          <div class="label">Actionability</div>
+          <div class="score" id="evalActionability">-</div>
+          <div class="sub">/5.0</div>
+        </div>
+      </div>
+      <div class="rationale" id="evalRationale"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Load scenarios on page load
+fetch('/scenarios')
+  .then(r => r.json())
+  .then(scenarios => {
+    const sel = document.getElementById('scenarioSelect');
+    scenarios.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      opt.textContent = `${s.title} (${s.complexity})`;
+      sel.appendChild(opt);
+    });
+  });
+
+function loadScenario() {
+  const sel = document.getElementById('scenarioSelect');
+  if (!sel.value) return;
+  fetch('/scenarios')
+    .then(r => r.json())
+    .then(scenarios => {
+      const s = scenarios.find(x => x.id === sel.value);
+      if (s) document.getElementById('missionInput').value = s.mission;
+    });
+}
+
+function setLoading(active, text) {
+  const el = document.getElementById('loading');
+  const txt = document.getElementById('loadingText');
+  el.classList.toggle('active', active);
+  if (text) txt.textContent = text;
+}
+
+function setStatus(type, msg) {
+  const bar = document.getElementById('statusBar');
+  bar.className = 'status-bar active ' + type;
+  bar.textContent = msg;
+}
+
+function showSelfImprovement(text) {
+  const el = document.getElementById('selfImprovement');
+  const content = document.getElementById('selfImprovementContent');
+  if (text) {
+    el.classList.add('active');
+    content.textContent = text;
+  } else {
+    el.classList.remove('active');
+  }
+}
+
+function scoreClass(val) {
+  if (val >= 4) return 'score-good';
+  if (val >= 3) return 'score-mid';
+  return 'score-bad';
+}
+
+function renderMarkdown(text) {
+  if (!text) return '';
+  let html = text
+    .replace(/### (.+)/g, '<h3>$1</h3>')
+    .replace(/## (.+)/g, '<h2>$1</h2>')
+    .replace(/# (.+)/g, '<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`(.+?)`/g, '<code>$1</code>')
+    .replace(/^- (.+)/gm, '<li>$1</li>')
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/\n/g, '<br>');
+  if (html.includes('<li>')) {
+    html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+  }
+  return '<p>' + html + '</p>';
+}
+
+async function investigate() {
+  const mission = document.getElementById('missionInput').value.trim();
+  if (!mission) return;
+
+  const btn = document.getElementById('investigateBtn');
+  btn.disabled = true;
+
+  document.getElementById('responseSection').classList.remove('active');
+  document.getElementById('evaluationSection').style.display = 'none';
+  showSelfImprovement(null);
+  setLoading(true, 'Starting investigation...');
+
+  const contentEl = document.getElementById('responseContent');
+  contentEl.innerHTML = '';
+
+  try {
+    const response = await fetch('/run/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mission, session_id: 'web-' + Date.now() }),
+    });
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            handleEvent(data);
+          } catch (e) {
+            // skip malformed events
+          }
+        }
+      }
+    }
+
+    // Process remaining buffer
+    if (buffer.startsWith('data: ')) {
+      try {
+        const data = JSON.parse(buffer.slice(6));
+        handleEvent(data);
+      } catch (e) {}
+    }
+  } catch (err) {
+    setStatus('error', 'Connection error: ' + err.message);
+  } finally {
+    setLoading(false);
+    btn.disabled = false;
+  }
+}
+
+function handleEvent(event) {
+  const type = event.type;
+  const data = event.data;
+
+  switch (type) {
+    case 'status':
+      setLoading(true, data);
+      break;
+
+    case 'content':
+      document.getElementById('responseSection').classList.add('active');
+      const contentEl = document.getElementById('responseContent');
+      contentEl.innerHTML = renderMarkdown(data);
+      break;
+
+    case 'tool_call':
+      setLoading(true, `Running: ${data.name}`);
+      const tc = document.getElementById('toolCalls');
+      const el = document.createElement('div');
+      el.className = 'tool-call';
+      el.innerHTML = `<span class="icon pending"></span> <code>${data.name}</code>`;
+      tc.appendChild(el);
+      break;
+
+    case 'tool_result':
+      setLoading(true, 'Processing results...');
+      break;
+
+    case 'evaluation':
+      document.getElementById('evaluationSection').style.display = 'block';
+      const acc = document.getElementById('evalAccuracy');
+      const comp = document.getElementById('evalCompleteness');
+      const act = document.getElementById('evalActionability');
+      const rat = document.getElementById('evalRationale');
+
+      acc.textContent = data.accuracy || '-';
+      acc.className = 'score ' + scoreClass(data.accuracy);
+      comp.textContent = data.completeness || '-';
+      comp.className = 'score ' + scoreClass(data.completeness);
+      act.textContent = data.actionability || '-';
+      act.className = 'score ' + scoreClass(data.actionability);
+      rat.textContent = data.rationale || '';
+      setStatus('success', 'Investigation complete');
+      break;
+
+    case 'self_improvement':
+      showSelfImprovement(data);
+      break;
+
+    case 'error':
+      setStatus('error', 'Error: ' + data);
+      break;
+
+    case 'done':
+      setLoading(false);
+      break;
+  }
+}
+
+function clearAll() {
+  document.getElementById('missionInput').value = '';
+  document.getElementById('responseSection').classList.remove('active');
+  document.getElementById('evaluationSection').style.display = 'none';
+  document.getElementById('toolCalls').innerHTML = '';
+  document.getElementById('responseContent').innerHTML = '';
+  document.getElementById('statusBar').className = 'status-bar';
+  showSelfImprovement(null);
+}
+</script>
+</body>
+</html>

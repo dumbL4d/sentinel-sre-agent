@@ -1,15 +1,21 @@
-"""FastAPI web server for Sentinel SRE Agent demo."""
+"""FastAPI web server for Sentinel SRE Agent with SSE streaming and web UI."""
 
 from __future__ import annotations
 
+import asyncio
+import json
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from sentinel.tracing import setup_tracing
-from sentinel.agent import SentinelAgent
+from sentinel.agent import SentinelAdkAgent
 from sentinel.mcp import PhoenixMCPClient
 from sentinel.tools import (
     QueryMetrics,
@@ -22,30 +28,29 @@ from sentinel.tools import (
     SelfIntrospect,
 )
 from sentinel.scenarios import SCENARIOS, list_scenarios
+from sentinel.evaluation import LLMJudge
 
 load_dotenv()
 setup_tracing()
 
 app = FastAPI(title="Sentinel SRE Agent", version="0.1.0")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 _agent = None
 
 
-def get_agent() -> SentinelAgent:
+def get_agent() -> SentinelAdkAgent:
     global _agent
     if _agent is None:
         phoenix_client = PhoenixMCPClient()
-        tools = [
-            SelfIntrospect(phoenix_client),
-            QueryMetrics(),
-            QueryTraces(),
-            GetAlerts(),
-            AnalyzeDrift(),
-            CorrelateSignals(),
-            SuggestRemediation(),
-            CreateAlert(),
-        ]
-        _agent = SentinelAgent(tools=tools)
+        _agent = SentinelAdkAgent(phoenix_client=phoenix_client)
     return _agent
 
 
@@ -64,6 +69,12 @@ def root():
     return {"name": "Sentinel SRE Agent", "version": "0.1.0"}
 
 
+@app.get("/health")
+def health():
+    """Health check endpoint for Cloud Run."""
+    return {"status": "ok", "service": "sentinel-sre-agent"}
+
+
 @app.get("/scenarios")
 def get_scenarios():
     return list_scenarios()
@@ -75,13 +86,77 @@ def run_mission(req: MissionRequest):
     response = agent.run(
         req.mission,
         session_id=req.session_id,
-        max_iterations=req.max_iterations,
     )
+
+    evaluator = _get_evaluator()
+    eval_result = None
+    if evaluator and response:
+        try:
+            eval_result = evaluator.evaluate(mission=req.mission, response=response)
+        except Exception:
+            pass
+
     return {
-        "content": response.content,
-        "tool_calls": response.tool_calls,
-        "session_id": response.session_id,
+        "content": response,
+        "session_id": req.session_id,
+        "evaluation": {
+            "overall_score": eval_result.overall_score if eval_result else None,
+            "accuracy": eval_result.accuracy if eval_result else None,
+            "completeness": eval_result.completeness if eval_result else None,
+            "actionability": eval_result.actionability if eval_result else None,
+            "rationale": eval_result.rationale if eval_result else None,
+        } if eval_result else None,
     }
+
+
+@app.post("/run/stream")
+async def run_mission_stream(req: MissionRequest):
+    """SSE streaming endpoint for real-time agent investigation display."""
+    agent = get_agent()
+
+    async def event_generator():
+        yield f"data: {json.dumps({'type': 'status', 'data': 'Starting investigation...'})}\n\n"
+
+        mission = req.mission
+
+        yield f"data: {json.dumps({'type': 'content', 'data': '### Self-Reflection\n\nChecking Phoenix for similar past cases...'})}\n\n"
+        await asyncio.sleep(0.3)
+
+        try:
+            final_response = agent.run(mission, session_id=req.session_id)
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'data': str(e)})}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'data': ''})}\n\n"
+            return
+
+        if final_response:
+            yield f"data: {json.dumps({'type': 'content', 'data': final_response})}\n\n"
+
+        evaluator = _get_evaluator()
+        if evaluator and final_response:
+            try:
+                eval_result = evaluator.evaluate(mission=mission, response=final_response)
+                yield f"data: {json.dumps({'type': 'evaluation', 'data': {
+                    'overall_score': eval_result.overall_score,
+                    'accuracy': eval_result.accuracy,
+                    'completeness': eval_result.completeness,
+                    'actionability': eval_result.actionability,
+                    'rationale': eval_result.rationale,
+                }})}\n\n"
+            except Exception:
+                pass
+
+        yield f"data: {json.dumps({'type': 'done', 'data': ''})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.post("/scenario")
@@ -95,20 +170,59 @@ def run_scenario(req: ScenarioRequest):
     agent = get_agent()
     response = agent.run(scenario.mission, session_id=scenario.id)
 
+    evaluator = _get_evaluator()
+    eval_result = None
+    if evaluator and response:
+        try:
+            eval_result = evaluator.evaluate(
+                mission=scenario.mission,
+                response=response,
+            )
+        except Exception:
+            pass
+
     return {
         "scenario": {
             "id": scenario.id,
             "title": scenario.title,
         },
-        "content": response.content,
-        "tool_calls": response.tool_calls,
+        "content": response,
+        "evaluation": {
+            "overall_score": eval_result.overall_score if eval_result else None,
+            "accuracy": eval_result.accuracy if eval_result else None,
+            "completeness": eval_result.completeness if eval_result else None,
+            "actionability": eval_result.actionability if eval_result else None,
+        } if eval_result else None,
     }
+
+
+def _get_evaluator() -> LLMJudge | None:
+    try:
+        return LLMJudge()
+    except Exception:
+        return None
+
+
+_static_served = False
+
+
+def _serve_static():
+    global _static_served
+    if not _static_served:
+        static_dir = Path(__file__).parent / "static"
+        static_dir.mkdir(exist_ok=True)
+        if static_dir.exists():
+            app.mount("/ui", StaticFiles(directory=str(static_dir), html=True), name="ui")
+        _static_served = True
 
 
 def main():
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    _serve_static()
+
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
 
 
 if __name__ == "__main__":

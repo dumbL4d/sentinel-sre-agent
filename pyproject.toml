@@ -7,10 +7,11 @@ name = "sentinel-sre-agent"
 version = "0.1.0"
 description = "Self-improving SRE agent for ML model observability with Gemini, Phoenix tracing, and MCP"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = {text = "MIT"}
 dependencies = [
     "google-genai>=1.57.0",
+    "google-adk>=2.0.0",
     "openinference-instrumentation-google-genai>=0.1.14",
     "arize-phoenix>=5.0",
     "opentelemetry-sdk>=1.27.0",
@@ -27,6 +28,8 @@ dependencies = [
     "pyyaml>=6.0",
     "fastapi>=0.115.0",
     "uvicorn>=0.30.0",
+    "sse-starlette>=2.0.0",
+    "aiofiles>=24.0",
 ]
 
 [project.optional-dependencies]
