@@ -1,154 +1,198 @@
 # Sentinel SRE Agent
 
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](pyproject.toml)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Cloud%20Run-blueviolet)](CLOUD_RUN_URL)
+
 **Self-improving SRE agent for ML model observability and incident response.**
 
 Built for the [Google Cloud Rapid Agent Hackathon](https://rapid-agent.devpost.com/) — Arize Partner Track.
 
-> AI that doesn't just provide answers — it investigates incidents, learns from past performance, and gets better over time.
+## What It Does
 
-## Why This Matters
+Sentinel is an AI agent that investigates ML production incidents by querying real-time metrics, traces, and drift signals — and gets smarter over time by querying its own past investigation traces via Arize Phoenix MCP, adapting its reasoning based on what worked before. Every investigation is traced to Phoenix Cloud, scored by an LLM judge, and the scores feed back into the agent's self-improvement loop for the next incident.
 
-When ML models degrade in production, engineers need more than alerts — they need an agent that can:
-- **Investigate** incidents across metrics, traces, and drift signals
-- **Correlate** signals to find root causes (not just symptoms)
-- **Self-reflect** by querying its own past performance via Phoenix MCP
-- **Recommend** specific, prioritized remediation actions
-- **Learn** from evaluations to improve future investigations
+## Try It in 60 Seconds
+
+```bash
+curl -X POST CLOUD_RUN_URL/run \
+  -H "Content-Type: application/json" \
+  -d '{"mission": "URGENT: Error rate on fraud-detection-v1 just spiked to 15%. Investigate immediately and tell me what to do."}'
+```
+
+Expected output (truncated):
+```json
+{
+  "content": "**Summary**\nFraud-detection-v1 is experiencing a critical error rate...\n\n**Evidence**\n...",
+  "session_id": "...",
+  "evaluation": {
+    "overall_score": 4.5,
+    "accuracy": 4.5,
+    "completeness": 4.0,
+    "actionability": 5.0,
+    ...
+  }
+}
+```
+
+## How the Self-Improvement Loop Works
+
+```mermaid
+sequenceDiagram
+    participant Incident
+    participant Agent
+    participant PhoenixMCP as Phoenix MCP
+    participant PhoenixCloud as Phoenix Cloud
+    participant Judge as LLM Judge
+
+    Incident->>Agent: New investigation
+    Agent->>PhoenixMCP: self_introspect()
+    PhoenixMCP->>PhoenixCloud: Query past traces + eval scores
+    PhoenixCloud-->>PhoenixMCP: Similar past cases, scores, annotations
+    PhoenixMCP-->>Agent: Historical context + insights
+    Agent->>Agent: Adapt strategy based on what worked before
+    Agent->>PhoenixCloud: Run investigation (traced via OpenInference)
+    Agent-->>Incident: Investigation report
+    Judge->>Judge: Score response (accuracy, completeness, actionability)
+    Judge->>PhoenixCloud: Store evaluation scores
+    Note over Agent,PhoenixCloud: Next incident → loop repeats with improved context
+```
 
 ## Architecture
 
 ```mermaid
 flowchart TD
-    UQ["💬 User Query
-    'Investigate latency spike in sentiment-classifier-v2'"]
+    User["User<br/>(CLI / Web UI)"]
+    ADK["Vertex AI ADK Runner<br/>google-adk Agent"]
 
-    subgraph AG["Gemini Agent (google-genai SDK)"]
-        RL["Reasoning Loop with Tool Calling"]
-        S1["1. SELF-INTROSPECT → Query past traces via MCP"]
-        S2["2. QUERY METRICS → Check model health"]
-        S3["3. CORRELATE → Find patterns across signals"]
-        S4["4. ANALYZE DRIFT → Detect distribution shifts"]
-        S5["5. REMEDIATE → Suggest actionable fixes"]
-        S6["6. EVALUATE → LLM-as-a-judge scores response"]
+    subgraph Tools["11 Sentinel Tools"]
+        SI["self_introspect<br/>→ Phoenix MCP"]
+        QM["QueryMetrics"]
+        QT["QueryTraces"]
+        GA["GetAlerts"]
+        AD["AnalyzeDrift"]
+        CS["CorrelateSignals"]
+        SR["SuggestRemediation"]
+        CA["CreateAlert"]
+        PT["QueryPhoenixTraces"]
+        PS["QueryPhoenixSpans"]
+        PSE["QueryPhoenixSessions"]
     end
 
-    TR["📡 Tracing (OpenInference)
-    Every LLM call → traced → sent to Phoenix"]
-
-    subgraph PX["Arize Phoenix Cloud"]
-        direction LR
-        T["📊 Traces (spans)"]
-        S["💬 Sessions (convs)"]
-        E["⭐ Evaluations (LLM Judge)
-        accuracy, completeness, actionability"]
-        MCP["🔄 Phoenix MCP Server
-        Self-Introspection Loop
-        Agent queries own traces → learns from history"]
+    subgraph Phoenix["Arize Phoenix Cloud"]
+        OTEL["OpenInference Tracing"]
+        TRACES["Traces (spans)"]
+        EVALS["Evaluations (LLM Judge)"]
+        MCP["Phoenix MCP Server"]
     end
 
-    UQ --> AG
-    S1 --> MCP
-    AG --> TR
-    TR --> PX
-    MCP -.->|"queries past traces
-    for self-improvement"| S1
+    Judge["LLM Judge (Gemini)<br/>→ Evaluation scores"]
+
+    User --> ADK
+    ADK --> Tools
+    SI --> MCP
+    MCP --> SI
+    ADK --> OTEL
+    OTEL --> TRACES
+    TRACES --> MCP
+    Judge --> EVALS
+    EVALS --> MCP
 ```
 
-## Quick Start
+## Judging Criteria
 
-### 1. Set up API keys
+| Criterion | What We Built | Where to See It |
+|---|---|---|
+| **Uses Google Cloud Agent Builder** | Vertex AI ADK (`google-adk` 2.x) `Agent` + `Runner` + `FunctionTool` wrapping all 11 tools | `src/sentinel/agent/adk_agent.py` |
+| **Arize Phoenix Integration** | OpenInference traces every LLM call to Phoenix Cloud; agent queries Phoenix via MCP for self-improvement | `src/sentinel/tracing.py`, `src/sentinel/mcp/phoenix_client.py` |
+| **Self-Improvement Loop** | `self_introspect` tool queries Phoenix MCP for similar past cases and eval scores; agent adapts reasoning from historical patterns | `src/sentinel/tools/self_introspect.py`, system prompt in `src/sentinel/agent/prompts.py` |
+| **Multi-Tool Investigation** | 11 tools: metrics, traces, alerts, drift analysis, signal correlation, alert creation, remediation suggestions, Phoenix introspection | `src/sentinel/tools/` directory |
+| **LLM-as-a-Judge Evaluation** | Gemini evaluates every response on accuracy, completeness, actionability (1-5 scale) | `src/sentinel/evaluation/llm_judge.py` |
+| **Streaming Web UI** | Vanilla JS dashboard with SSE streaming, health badges, phoenix/data-source indicators | `src/sentinel/static/index.html`, `src/sentinel/server.py` |
+| **Cloud Run Deployable** | Dockerfile with healthcheck, GitHub Actions CI → Artifact Registry → Cloud Run | `Dockerfile`, `.github/workflows/deploy.yml` |
 
-```bash
-cp .env.example .env
-# Edit .env with your keys:
-# GEMINI_API_KEY=your-key-from-aistudio.google.com
-# PHOENIX_API_KEY=your-key-from-app.phoenix.arize.com
-```
+## Tech Stack
 
-Get your keys:
-- **Gemini**: [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
-- **Phoenix Cloud**: [app.phoenix.arize.com](https://app.phoenix.arize.com) (free tier)
-
-### 2. Install
-
-```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
-```
-
-### 3. Run
-
-**Interactive mode:**
-```bash
-sentinel interactive --demo          # Demo mode with seeded data
-sentinel interactive                  # Live mode (requires API keys)
-```
-
-**Run all demo scenarios with evaluation:**
-```bash
-sentinel demo-scenarios --demo --evaluate
-```
-
-**List scenarios:**
-```bash
-sentinel scenarios
-```
-
-## Hackathon Requirements Checklist
-
-- [x] **Code-owned agent runtime** — Uses `google-genai` SDK with tool calling
-- [x] **OpenInference tracing** — All LLM calls instrumented via `openinference-instrumentation-google-genai`
-- [x] **Traces to Phoenix** — Sent to Phoenix Cloud (or local Phoenix server)
-- [x] **Phoenix MCP integration** — Agent self-introspects on its own traces at runtime
-- [x] **LLM-as-a-judge evaluations** — Evaluates responses on accuracy, completeness, actionability
-- [x] **Self-improvement loop** — Agent reviews past traces and evaluations to adapt reasoning
-
-## Demo Scenarios
-
-| ID | Scenario | Complexity | What It Shows |
-|----|----------|------------|---------------|
-| `scenario-001` | Latency Spike Investigation | Medium | Multi-step investigation, correlation, remediation |
-| `scenario-002` | Model Drift Analysis | Medium | Drift detection, feature analysis, retraining recommendation |
-| `scenario-003` | Critical Incident Response | High | End-to-end incident response with all tools |
-| `scenario-004` | Performance Health Check | Low | Comprehensive health assessment across models |
+| Component | Technology |
+|---|---|
+| Agent Framework | Vertex AI ADK (`google-adk` 2.x) |
+| LLM | Gemini 2.5 Flash Lite |
+| Observability | Arize Phoenix Cloud (traces, spans, evaluations) |
+| MCP Integration | `@arizeai/phoenix-mcp` over stdio |
+| Tracing | OpenInference + OpenTelemetry OTLP |
+| Evaluation | Gemini LLM-as-a-Judge |
+| Web UI | Vanilla JS, SSE (no build step) |
+| API Server | FastAPI + Uvicorn |
+| Deployment | Cloud Run + GitHub Actions |
 
 ## Project Structure
 
 ```
 sentinel-sre-agent/
 ├── src/sentinel/
-│   ├── __init__.py
 │   ├── agent/
-│   │   ├── core.py           # Gemini agent with tool calling loop
+│   │   ├── adk_agent.py      # Vertex AI ADK agent (primary)
+│   │   ├── core.py           # Legacy google-genai agent (fallback)
 │   │   └── prompts.py        # System prompt with self-improvement guidance
 │   ├── mcp/
-│   │   └── phoenix_client.py # Phoenix MCP client for self-introspection
+│   │   ├── phoenix_client.py # Phoenix MCP client (real MCP protocol)
+│   │   └── arize_client.py   # High-level Arize data access layer
 │   ├── tools/
-│   │   ├── base.py           # Base tool class
-│   │   ├── query.py          # query_metrics, query_traces, get_alerts
+│   │   ├── query.py          # query_metrics (with Phoenix fallback), query_traces, get_alerts
 │   │   ├── analyze.py        # analyze_drift, correlate_signals
 │   │   ├── actions.py        # create_alert, suggest_remediation
-│   │   └── self_introspect.py# Agent queries own Phoenix traces
+│   │   ├── self_introspect.py# Self-improvement loop (queries Phoenix MCP)
+│   │   └── phoenix_tools.py  # Raw Phoenix trace/span/session queries
 │   ├── evaluation/
-│   │   └── llm_judge.py      # LLM-as-a-judge evaluation pipeline
-│   ├── tracing.py            # OpenInference → Phoenix tracing setup
-│   ├── scenarios.py          # Demo scenarios for hackathon presentation
-│   └── cli.py                # CLI with interactive, demo, and evaluate modes
-├── tests/
+│   │   └── llm_judge.py      # LLM-as-a-judge evaluation
+│   ├── static/
+│   │   └── index.html        # Streaming web UI
+│   ├── server.py             # FastAPI server with SSE + health
+│   ├── tracing.py            # OpenInference → Phoenix tracing
+│   ├── scenarios.py          # Demo scenarios
+│   └── cli.py                # CLI entry point
+├── Dockerfile
 ├── pyproject.toml
-├── .env
 └── README.md
 ```
 
-## Self-Improvement Loop
+## Running Locally
 
-The agent gets better over time through this cycle:
+**1. Clone and install:**
+```bash
+git clone https://github.com/dumbL4d/sentinel-sre-agent.git
+cd sentinel-sre-agent
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+```
 
-1. **Investigate** — Agent handles an incident using tools
-2. **Trace** — Every call is traced to Phoenix via OpenInference
-3. **Evaluate** — LLM-as-a-judge scores the response (1-5 on accuracy, completeness, actionability)
-4. **Learn** — On future incidents, the agent queries Phoenix MCP for similar past cases
-5. **Adapt** — Agent reviews what worked and what didn't, adjusting its approach
+**2. Set environment variables (all required):**
+```bash
+export GEMINI_API_KEY="your-key-from-aistudio.google.com"
+export PHOENIX_API_KEY="your-key-from-app.phoenix.arize.com"
+export PHOENIX_COLLECTOR_ENDPOINT="https://app.phoenix.arize.com"
+```
+
+**3. Run the server:**
+```bash
+sentinel-serve
+```
+
+**4. Open the web UI:**
+```
+http://localhost:8000/ui/
+```
+
+**5. Or use the CLI:**
+```bash
+sentinel interactive --demo
+```
+
+## Known Limitations
+
+- **QueryMetrics synthetic fallback**: When a Phoenix project has no matching model spans (or returns < 5 spans), `QueryMetrics` silently falls back to seeded synthetic data. The `data_source` field in the response indicates whether data came from Phoenix or the synthetic generator.
+- **Text-based similarity for self-improvement**: The self-improvement loop finds past cases using token overlap (bag-of-words), not semantic embeddings. A future upgrade would use Phoenix's native embedding search for more relevant historical context retrieval.
+- **No human-in-the-loop for remediation**: `create_alert` and `suggest_remediation` execute immediately without requiring manual approval. A production deployment should gate remediation actions behind a human review step.
 
 ## License
 

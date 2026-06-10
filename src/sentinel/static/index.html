@@ -265,16 +265,31 @@ setInterval(pollHealth, 10000);
 pollHealth();
 
 // Load scenarios on page load
+fetch('/scenarios')
+  .then(r => r.json())
+  .then(scenarios => {
+    const sel = document.getElementById('scenarioSelect');
+    scenarios.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      const badge = s.complexity === 'high' ? '🔴'
+                  : s.complexity === 'medium' ? '🟡' : '🟢';
+      opt.textContent = badge + ' ' + s.title;
+      sel.appendChild(opt);
+    });
+  });
 
 function loadScenario() {
   const sel = document.getElementById('scenarioSelect');
   if (!sel.value) return;
-  fetch('/scenarios')
-    .then(r => r.json())
-    .then(scenarios => {
-      const s = scenarios.find(x => x.id === sel.value);
-      if (s) document.getElementById('missionInput').value = s.mission;
-    });
+  const missions = {
+    'scenario-001': "Investigate the P99 latency spike in sentiment-classifier-v2. What's causing it and what should we do?",
+    'scenario-002': 'Check all models for prediction drift. Are any models degrading?',
+    'scenario-003': 'URGENT: Error rate on fraud-detection-v1 just spiked to 15%. Investigate immediately and tell me what to do.',
+    'scenario-004': 'Give me a health check summary of all our production models. Any concerns?'
+  };
+  const mission = missions[sel.value];
+  if (mission) document.getElementById('missionInput').value = mission;
 }
 
 function setLoading(active, text) {
