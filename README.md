@@ -2,7 +2,7 @@
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](pyproject.toml)
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-Cloud%20Run-blueviolet)](CLOUD_RUN_URL)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Cloud%20Run-blueviolet)](https://sentinel-sre-agent-t4k2mrvyaq-uc.a.run.app)
 
 **Self-improving SRE agent for ML model observability and incident response.**
 
@@ -15,7 +15,7 @@ Sentinel is an AI agent that investigates ML production incidents by querying re
 ## Try It in 60 Seconds
 
 ```bash
-curl -X POST CLOUD_RUN_URL/run \
+curl -X POST https://sentinel-sre-agent-t4k2mrvyaq-uc.a.run.app/run \
   -H "Content-Type: application/json" \
   -d '{"mission": "URGENT: Error rate on fraud-detection-v1 just spiked to 15%. Investigate immediately and tell me what to do."}'
 ```
