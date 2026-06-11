@@ -32,6 +32,8 @@ jobs:
           PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
           GIT_SHA: ${{ github.sha }}
         run: |
+          PROJECT_ID=$(echo "$PROJECT_ID" | tr -d '[:space:]')
+          GIT_SHA=$(echo "$GIT_SHA" | tr -d '[:space:]')
           IMAGE_TAG="us-central1-docker.pkg.dev/${PROJECT_ID}/sentinel-agent/sentinel-sre-agent:${GIT_SHA}"
           echo "Building: $IMAGE_TAG"
           docker build -t "$IMAGE_TAG" .
@@ -43,6 +45,8 @@ jobs:
           PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
           GIT_SHA: ${{ github.sha }}
         run: |
+          PROJECT_ID=$(echo "$PROJECT_ID" | tr -d '[:space:]')
+          GIT_SHA=$(echo "$GIT_SHA" | tr -d '[:space:]')
           IMAGE_TAG="us-central1-docker.pkg.dev/${PROJECT_ID}/sentinel-agent/sentinel-sre-agent:${GIT_SHA}"
           gcloud run deploy sentinel-sre-agent \
             --image "$IMAGE_TAG" \
