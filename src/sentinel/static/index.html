@@ -458,13 +458,24 @@ async function investigate() {
     return;
   }
 
+  hasPhoenixData = false;
+  hasAnyToolResults = false;
+  document.getElementById('dataSourceBadge').style.display = 'none';
   document.getElementById('responseSection').classList.remove('active');
   document.getElementById('evaluationSection').style.display = 'none';
+  document.getElementById('debateSection').classList.remove('active');
+  document.getElementById('panelAContent').innerHTML = '';
+  document.getElementById('panelBContent').innerHTML = '';
+  document.getElementById('panelCContent').innerHTML = '';
+  document.getElementById('panelASpinner').style.display = 'none';
+  document.getElementById('panelBSpinner').style.display = 'none';
+  document.getElementById('panelCSpinner').style.display = 'none';
   showSelfImprovement(null);
   setLoading(true, 'Starting investigation...');
 
   const contentEl = document.getElementById('responseContent');
   contentEl.innerHTML = '';
+  document.getElementById('toolCalls').innerHTML = '';
 
   try {
     const response = await fetch('/run/stream', {
@@ -513,8 +524,13 @@ async function investigate() {
 }
 
 async function runDebate(mission, btn) {
+  hasPhoenixData = false;
+  hasAnyToolResults = false;
+  document.getElementById('dataSourceBadge').style.display = 'none';
   document.getElementById('responseSection').classList.remove('active');
   document.getElementById('evaluationSection').style.display = 'none';
+  document.getElementById('toolCalls').innerHTML = '';
+  document.getElementById('responseContent').innerHTML = '';
   showSelfImprovement(null);
   setLoading(true, 'Starting debate...');
 
