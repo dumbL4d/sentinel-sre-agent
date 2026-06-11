@@ -163,10 +163,72 @@
   .status-bar.info { background: rgba(56, 189, 248, 0.1); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.2); }
   .status-bar.success { background: rgba(52, 211, 153, 0.1); color: var(--success); border: 1px solid rgba(52, 211, 153, 0.2); }
   .status-bar.error { background: rgba(248, 113, 113, 0.1); color: var(--error); border: 1px solid rgba(248, 113, 113, 0.2); }
+  .btn-debate {
+    padding: 10px 24px; border-radius: 8px; font-weight: 600; font-size: 0.9rem; cursor: pointer;
+    background: var(--surface2); color: var(--text-dim); border: 1px solid var(--border);
+    transition: all 0.2s;
+  }
+  .btn-debate:hover { background: var(--border); }
+  .btn-debate.active {
+    border-color: var(--accent2); color: var(--accent2);
+    background: rgba(129, 140, 248, 0.1);
+    box-shadow: 0 0 12px rgba(129, 140, 248, 0.2);
+  }
+  .debate-section { display: none; }
+  .debate-section.active { display: block; }
+  .debate-panels {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+    gap: 16px;
+  }
+  .debate-panel {
+    background: var(--surface); border-radius: 12px; border: 1px solid var(--border);
+    padding: 16px; min-height: 120px;
+  }
+  .debate-panel.panel-a { border-color: var(--accent); }
+  .debate-panel.panel-b { border-color: var(--error); }
+  .debate-panel.panel-c { grid-column: 1 / -1; border-color: var(--warn); }
+  .panel-header {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+    padding-bottom: 8px; border-bottom: 1px solid var(--border);
+  }
+  .panel-label {
+    font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.08em;
+    padding: 3px 10px; border-radius: 99px; font-weight: 700; white-space: nowrap;
+  }
+  .panel-a .panel-label { background: rgba(56, 189, 248, 0.15); color: var(--accent); }
+  .panel-b .panel-label { background: rgba(248, 113, 113, 0.15); color: var(--error); }
+  .panel-c .panel-label { background: rgba(251, 191, 36, 0.15); color: var(--warn); }
+  .panel-title { font-size: 0.8rem; color: var(--text-dim); }
+  .panel-content {
+    font-family: var(--font); font-size: 0.85rem; line-height: 1.6;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .panel-content h1, .panel-content h2, .panel-content h3 {
+    margin-top: 12px; margin-bottom: 6px;
+    background: none; -webkit-text-fill-color: var(--text); font-family: inherit;
+    font-size: 1rem;
+  }
+  .panel-content h2 { font-size: 1.1rem; color: var(--accent); }
+  .panel-content h3 { color: var(--accent2); }
+  .panel-content strong { color: var(--success); }
+  .panel-content ul, .panel-content ol { padding-left: 20px; margin: 8px 0; }
+  .panel-content li { margin: 4px 0; }
+  .panel-content code {
+    background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-size: 0.8rem;
+  }
+  .panel-spinner {
+    display: none; align-items: center; gap: 8px;
+    font-size: 0.8rem; color: var(--text-dim); padding: 8px 0;
+  }
+  .panel-spinner.active { display: flex; }
   @media (max-width: 640px) {
     .eval-grid { grid-template-columns: 1fr; }
     .controls { flex-direction: column; align-items: stretch; }
     .scenario-select { min-width: auto; }
+    .debate-panels { grid-template-columns: 1fr; }
+    .debate-panel.panel-c { grid-column: 1; }
   }
 </style>
 </head>
@@ -185,6 +247,7 @@
     <div class="controls">
       <button class="btn-primary" id="investigateBtn" onclick="investigate()">Investigate</button>
       <button class="btn-secondary" onclick="clearAll()">Clear</button>
+      <button class="btn-debate" id="debateToggle" onclick="toggleDebateMode()">⚔️ Debate Mode</button>
       <select class="scenario-select" id="scenarioSelect" onchange="loadScenario()">
         <option value="">-- Load demo scenario --</option>
       </select>
@@ -233,11 +296,54 @@
       <div class="rationale" id="evalRationale"></div>
     </div>
   </div>
+
+  <div class="debate-section" id="debateSection">
+    <div class="debate-panels">
+      <div class="debate-panel panel-a" id="panelA">
+        <div class="panel-header">
+          <span class="panel-label">🛡️ Conservative</span>
+          <span class="panel-title">Agent A — Conservative</span>
+        </div>
+        <div class="panel-content" id="panelAContent"></div>
+        <div class="panel-spinner" id="panelASpinner">
+          <div class="spinner"></div> Waiting for conservative agent...
+        </div>
+      </div>
+      <div class="debate-panel panel-b" id="panelB">
+        <div class="panel-header">
+          <span class="panel-label">⚡ Aggressive</span>
+          <span class="panel-title">Agent B — Aggressive</span>
+        </div>
+        <div class="panel-content" id="panelBContent"></div>
+        <div class="panel-spinner" id="panelBSpinner">
+          <div class="spinner"></div> Waiting for aggressive agent...
+        </div>
+      </div>
+      <div class="debate-panel panel-c" id="panelC">
+        <div class="panel-header">
+          <span class="panel-label">⚖️ Verdict</span>
+          <span class="panel-title">Moderator Synthesis</span>
+        </div>
+        <div class="panel-content" id="panelCContent"></div>
+        <div class="panel-spinner" id="panelCSpinner">
+          <div class="spinner"></div> Waiting for agents to complete...
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
 let hasPhoenixData = false;
 let hasAnyToolResults = false;
+let debateMode = false;
+
+function toggleDebateMode() {
+  debateMode = !debateMode;
+  const btn = document.getElementById('debateToggle');
+  btn.classList.toggle('active', debateMode);
+  btn.textContent = debateMode ? '⚔️ Debate ON' : '⚔️ Debate Mode';
+}
 
 // ---- Health polling ----
 async function pollHealth() {
@@ -347,6 +453,11 @@ async function investigate() {
   const btn = document.getElementById('investigateBtn');
   btn.disabled = true;
 
+  if (debateMode) {
+    await runDebate(mission, btn);
+    return;
+  }
+
   document.getElementById('responseSection').classList.remove('active');
   document.getElementById('evaluationSection').style.display = 'none';
   showSelfImprovement(null);
@@ -398,6 +509,111 @@ async function investigate() {
   } finally {
     setLoading(false);
     btn.disabled = false;
+  }
+}
+
+async function runDebate(mission, btn) {
+  document.getElementById('responseSection').classList.remove('active');
+  document.getElementById('evaluationSection').style.display = 'none';
+  showSelfImprovement(null);
+  setLoading(true, 'Starting debate...');
+
+  document.getElementById('panelAContent').innerHTML = '';
+  document.getElementById('panelBContent').innerHTML = '';
+  document.getElementById('panelCContent').innerHTML = '';
+  document.getElementById('panelASpinner').style.display = 'none';
+  document.getElementById('panelBSpinner').style.display = 'none';
+  document.getElementById('panelCSpinner').style.display = 'none';
+  document.getElementById('debateSection').classList.add('active');
+
+  try {
+    const response = await fetch('/debate/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mission, session_id: 'web-debate-' + Date.now() }),
+    });
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            handleDebateEvent(data);
+          } catch (e) {
+            // skip malformed events
+          }
+        }
+      }
+    }
+
+    if (buffer.startsWith('data: ')) {
+      try {
+        const data = JSON.parse(buffer.slice(6));
+        handleDebateEvent(data);
+      } catch (e) {}
+    }
+  } catch (err) {
+    setStatus('error', 'Connection error: ' + err.message);
+  } finally {
+    setLoading(false);
+    btn.disabled = false;
+  }
+}
+
+function handleDebateEvent(event) {
+  const type = event.type;
+  const data = event.data;
+
+  switch (type) {
+    case 'status':
+      setLoading(true, data);
+      break;
+
+    case 'debate_status':
+      if (data === 'agent_a_start') {
+        document.getElementById('panelASpinner').style.display = 'flex';
+      } else if (data === 'agent_b_start') {
+        document.getElementById('panelBSpinner').style.display = 'flex';
+      } else if (data === 'moderator_start') {
+        document.getElementById('panelCSpinner').style.display = 'flex';
+        document.getElementById('panelCSpinner').innerHTML =
+          '<div class="spinner"></div> Moderator synthesizing...';
+      }
+      break;
+
+    case 'debate_result_a':
+      document.getElementById('panelASpinner').style.display = 'none';
+      document.getElementById('panelAContent').innerHTML = renderMarkdown(data);
+      break;
+
+    case 'debate_result_b':
+      document.getElementById('panelBSpinner').style.display = 'none';
+      document.getElementById('panelBContent').innerHTML = renderMarkdown(data);
+      break;
+
+    case 'debate_synthesis':
+      document.getElementById('panelCSpinner').style.display = 'none';
+      document.getElementById('panelCContent').innerHTML = renderMarkdown(data);
+      break;
+
+    case 'error':
+      setStatus('error', 'Error: ' + data);
+      break;
+
+    case 'done':
+      setStatus('success', 'Debate complete');
+      break;
   }
 }
 
@@ -491,6 +707,19 @@ function clearAll() {
   document.getElementById('responseContent').innerHTML = '';
   document.getElementById('statusBar').className = 'status-bar';
   showSelfImprovement(null);
+  document.getElementById('debateSection').classList.remove('active');
+  document.getElementById('panelAContent').innerHTML = '';
+  document.getElementById('panelBContent').innerHTML = '';
+  document.getElementById('panelCContent').innerHTML = '';
+  document.getElementById('panelASpinner').style.display = 'none';
+  document.getElementById('panelBSpinner').style.display = 'none';
+  document.getElementById('panelCSpinner').style.display = 'none';
+  if (debateMode) {
+    debateMode = false;
+    const btn = document.getElementById('debateToggle');
+    btn.classList.remove('active');
+    btn.textContent = '⚔️ Debate Mode';
+  }
 }
 </script>
 </body>

@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from sentinel.tracing import setup_tracing
 from sentinel.agent import SentinelAdkAgent
+from sentinel.agent.debate import DebateRunner
 from sentinel.mcp import PhoenixMCPClient
 from sentinel.tools import (
     QueryMetrics,
@@ -185,6 +186,36 @@ async def run_mission_stream(req: MissionRequest):
                 pass
 
         yield f"data: {json.dumps({'type': 'done', 'data': ''})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.post("/debate/stream")
+async def debate_stream(req: MissionRequest):
+    """SSE streaming endpoint for debate mode — two agents, moderator synthesis."""
+    phoenix_client = PhoenixMCPClient()
+    runner = DebateRunner(phoenix_client=phoenix_client)
+
+    async def event_generator():
+        yield (
+            "data: "
+            + json.dumps({"type": "status", "data": "Starting debate..."})
+            + "\n\n"
+        )
+        try:
+            async for event in runner.run_debate_async(req.mission):
+                yield "data: " + json.dumps(event) + "\n\n"
+        except Exception as e:
+            yield "data: " + json.dumps({"type": "error", "data": str(e)}) + "\n\n"
+            yield "data: " + json.dumps({"type": "done", "data": ""}) + "\n\n"
 
     return StreamingResponse(
         event_generator(),

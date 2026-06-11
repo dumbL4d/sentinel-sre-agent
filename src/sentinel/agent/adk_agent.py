@@ -121,6 +121,7 @@ class SentinelAdkAgent:
         api_key: str | None = None,
         phoenix_client: PhoenixMCPClient | None = None,
         system_prompt: str | None = None,
+        override_system_prompt: str | None = None,
     ):
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
         if not self.api_key:
@@ -128,7 +129,8 @@ class SentinelAdkAgent:
 
         self.model = model or os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
         self.pc = phoenix_client or PhoenixMCPClient()
-        self.system_prompt = system_prompt or SYSTEM_PROMPT
+        prompt_to_use = override_system_prompt or system_prompt or SYSTEM_PROMPT
+        self.system_prompt = prompt_to_use
 
         self.adk_tools = _make_tool_wrappers(self.pc)
 
