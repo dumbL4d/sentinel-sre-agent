@@ -143,7 +143,8 @@ async def run_mission_stream(req: MissionRequest):
 
         mission = req.mission
 
-        yield f"data: {json.dumps({'type': 'content', 'data': '### Self-Reflection\n\nChecking Phoenix for similar past cases...'})}\n\n"
+        _self_reflection = '### Self-Reflection\n\nChecking Phoenix for similar past cases...'
+        yield f"data: {json.dumps({'type': 'content', 'data': _self_reflection})}\n\n"
         await asyncio.sleep(0.3)
 
         try:
