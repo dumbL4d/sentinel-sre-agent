@@ -74,19 +74,28 @@ def health():
     """Health check endpoint for Cloud Run with Phoenix connectivity and model info."""
     phoenix_ok = False
     try:
-        pc = PhoenixMCPClient()
-        if not pc._use_demo():
-            async def _check():
-                try:
-                    result = await asyncio.wait_for(pc.list_traces(limit=1), timeout=3.0)
-                    return len(result) > 0
-                except Exception:
-                    return False
-            loop = asyncio.new_event_loop()
+        async def _check_phoenix_http() -> bool:
             try:
-                phoenix_ok = loop.run_until_complete(_check())
-            finally:
-                loop.close()
+                import httpx
+                phoenix_key = os.environ.get("PHOENIX_API_KEY", "")
+                phoenix_url = os.environ.get(
+                    "PHOENIX_COLLECTOR_ENDPOINT",
+                    "https://app.phoenix.arize.com"
+                ).rstrip("/")
+                if not phoenix_key:
+                    return False
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    resp = await client.get(
+                        f"{phoenix_url}/v1/projects",
+                        headers={"Authorization": f"Bearer {phoenix_key}"}
+                    )
+                    return resp.status_code in (200, 201)
+            except Exception:
+                return False
+
+        phoenix_ok = asyncio.run(
+            asyncio.wait_for(_check_phoenix_http(), timeout=8.0)
+        )
     except Exception:
         phoenix_ok = False
 
