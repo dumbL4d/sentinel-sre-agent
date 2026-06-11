@@ -160,13 +160,17 @@ async def run_mission_stream(req: MissionRequest):
         if evaluator and final_response:
             try:
                 eval_result = evaluator.evaluate(mission=mission, response=final_response)
-                yield f"data: {json.dumps({'type': 'evaluation', 'data': {
-                    'overall_score': eval_result.overall_score,
-                    'accuracy': eval_result.accuracy,
-                    'completeness': eval_result.completeness,
-                    'actionability': eval_result.actionability,
-                    'rationale': eval_result.rationale,
-                }})}\n\n"
+                eval_payload = {
+                    'type': 'evaluation',
+                    'data': {
+                        'overall_score': eval_result.overall_score,
+                        'accuracy': eval_result.accuracy,
+                        'completeness': eval_result.completeness,
+                        'actionability': eval_result.actionability,
+                        'rationale': eval_result.rationale,
+                    },
+                }
+                yield f"data: {json.dumps(eval_payload)}\n\n"
             except Exception:
                 pass
 
