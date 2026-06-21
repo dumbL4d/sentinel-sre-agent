@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 dependencies = [
-    "google-genai>=1.57.0",
+    "google-genai==1.57.0",
     "google-adk>=2.0.0",
     "openinference-instrumentation-google-genai>=0.1.14",
     "arize-phoenix>=5.0",
